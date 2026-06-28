@@ -4,12 +4,12 @@
   },
   "schemaDir": "./lexicons",
   "lexicons": {
-    "app.bsky.feed.describeFeedGenerator": "pds",
-    "app.bsky.feed.generator": "pds",
-    "app.bsky.feed.getFeedSkeleton": "pds",
-    "app.bsky.feed.like": "pds",
-    "app.bsky.feed.post": "pds",
-    "app.bsky.feed.repost": "pds",
-    "app.bsky.graph.follow": "pds"
+    "app.bsky.feed.describeFeedGenerator": "github",
+    "app.bsky.feed.generator": "github",
+    "app.bsky.feed.getFeedSkeleton": "github",
+    "app.bsky.feed.like": "github",
+    "app.bsky.feed.post": "github",
+    "app.bsky.feed.repost": "github",
+    "app.bsky.graph.follow": "github"
   }
 }

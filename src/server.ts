@@ -9,7 +9,7 @@ import { ids } from './lexicon/lexicons'
 import describeGenerator from './methods/describe-generator'
 import feedGeneration from './methods/feed-generation'
 import { handleEvent } from './subscription'
-import { type AppContext, env } from './util/config'
+import type { AppContext, FeedGeneratorConfig } from './util/config'
 import { createLogger } from './util/logger'
 import wellKnown from './well-known'
 
@@ -29,32 +29,41 @@ export class FeedGenerator {
     this.ingester = ingester
   }
 
-  static async create() {
+  static async create(
+    cfg: FeedGeneratorConfig
+  ) {
     const logger = createLogger(['Runner', 'Server'])
     logger.info('Creating server...')
 
-    logger.info(`Creating DB => ${env.FEEDGEN_SQLITE_LOCATION}`)
-    const db = createDb()
+    logger.info(`Creating DB => ${cfg.db.dbLoc}`)
+    const db = createDb(cfg.db.dbLoc)
 
     const app = express()
     const idResolver = new IdResolver()
 
+    const ctx: AppContext = {
+      cfg,
+      db,
+      didResolver: idResolver.did,
+      logger,
+    }
+
     const ingesterLogger = createLogger(['Runner', 'Server', 'Ingester'])
-    const ingester = new Ingester(env.FEEDGEN_SUBSCRIPTION_MODE, {
+    const ingester = new Ingester(cfg.subscription.mode, {
       idResolver,
-      handleEvent: async (evt) => await handleEvent(evt, db),
+      handleEvent: async (evt) => await handleEvent(evt, {...ctx, logger: ingesterLogger}),
       onInfo: ingesterLogger.info,
       onError: (err: Error) => ingesterLogger.error(err.message),
       getCursor: async () => {
         const res = await db
           .selectFrom('sub_state')
           .selectAll()
-          .where('service', '=', `${env.FEEDGEN_SUBSCRIPTION_MODE}:` + env[`FEEDGEN_SUBSCRIPTION_${env.FEEDGEN_SUBSCRIPTION_MODE.toUpperCase()}_ENDPOINT`])
+          .where('service', '=', `${cfg.subscription.mode}:${cfg[cfg.subscription.mode.toLowerCase()].endpoint}`)
           .executeTakeFirst()
         return res?.cursor
       },
-      service: env[`FEEDGEN_SUBSCRIPTION_${env.FEEDGEN_SUBSCRIPTION_MODE.toUpperCase()}_ENDPOINT`],
-      subscriptionReconnectDelay: env.FEEDGEN_SUBSCRIPTION_RECONNECT_DELAY,
+      service: cfg[cfg.subscription.mode.toLowerCase()].endpoint,
+      subscriptionReconnectDelay: cfg.subscription.reconnectDelay,
       unauthenticatedCommits: false,
       unauthenticatedHandles: false,
       compress: true,
@@ -73,15 +82,10 @@ export class FeedGenerator {
         blobLimit: 5 * 1024 * 1024, // 5mb
       },
     })
-    const ctx: AppContext = {
-      db,
-      didResolver: idResolver.did,
-      logger,
-    }
     feedGeneration(server, ctx)
-    describeGenerator(server)
+    describeGenerator(server, ctx)
     app.use(server.xrpc.router)
-    app.use(wellKnown())
+    app.use(wellKnown(ctx))
     
     logger.info('Server has been created!')
 
@@ -92,7 +96,7 @@ export class FeedGenerator {
     this.ctx.logger.info('Starting server...')
     await migrateToLatest(this.ctx.db)
     this.ingester.start()
-    this.server = this.app.listen(env.FEEDGEN_PORT, env.FEEDGEN_LISTENHOST)
+    this.server = this.app.listen(this.ctx.cfg.service.port)
     await events.once(this.server, 'listening')
     this.ctx.logger.info('Server started')
   }

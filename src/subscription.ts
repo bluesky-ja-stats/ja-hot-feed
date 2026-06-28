@@ -1,21 +1,20 @@
 import { IngesterEvent } from 'atingester'
 import { CID } from 'multiformats/cid'
 import { BlobRef, JsonBlobRef } from '@atproto/lexicon'
-import { type Database } from './db'
 import { ids, lexicons } from './lexicon/lexicons'
 import { Record as PostRecord } from './lexicon/types/app/bsky/feed/post'
 import { Record as RepostRecord } from './lexicon/types/app/bsky/feed/repost'
 import { Record as LikeRecord } from './lexicon/types/app/bsky/feed/like'
 import { Record as FollowRecord } from './lexicon/types/app/bsky/graph/follow'
-import { env } from './util/config'
+import type { AppContext } from './util/config'
 
 let i = 0
-export const handleEvent = async (evt: IngesterEvent, db: Database): Promise<void> => {
+export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<void> => {
   i++
   if ('time_us' in evt && i % 20 === 0) {
-    await updateCursor(evt.time_us, db)
+    await updateCursor(evt.time_us, ctx)
   } else if ('seq' in evt && evt.seq % 20 === 0) {
-    await updateCursor(evt.seq, db)
+    await updateCursor(evt.seq, ctx)
   }
 
   // This logs the text of every post off the firehose.
@@ -30,7 +29,7 @@ export const handleEvent = async (evt: IngesterEvent, db: Database): Promise<voi
   if (evt.event === 'create') {
     if (evt.collection === ids.AppBskyFeedPost && isPost(evt.record)) {
       if (evt.record.text.toLowerCase().includes('alf')) {
-        await db
+        await ctx.db
           .insertInto('post')
           .values({
             uri: evt.uri.toString(),
@@ -50,7 +49,7 @@ export const handleEvent = async (evt: IngesterEvent, db: Database): Promise<voi
 
   if (evt.event === 'delete') {
     if (evt.collection === ids.AppBskyFeedPost) {
-      await db
+      await ctx.db
         .deleteFrom('post')
         .where('uri', '=', evt.uri.toString())
         .execute()
@@ -61,16 +60,16 @@ export const handleEvent = async (evt: IngesterEvent, db: Database): Promise<voi
   }
 }
 
-const updateCursor = async (cursor: number, db: Database) => {
-  await db
+const updateCursor = async (cursor: number, ctx: AppContext) => {
+  await ctx.db
     .insertInto('sub_state')
     .values({
-      service: `${env.FEEDGEN_SUBSCRIPTION_MODE}:` + env[`FEEDGEN_SUBSCRIPTION_${env.FEEDGEN_SUBSCRIPTION_MODE.toUpperCase()}_ENDPOINT`],
+      service: `${ctx.cfg.subscription.mode}:${ctx.cfg[ctx.cfg.subscription.mode.toLowerCase()].endpoint}`,
       cursor,
     })
     .onConflict((oc) => oc
       .column('service')
-      .where('service', '=', `${env.FEEDGEN_SUBSCRIPTION_MODE}:` + env[`FEEDGEN_SUBSCRIPTION_${env.FEEDGEN_SUBSCRIPTION_MODE.toUpperCase()}_ENDPOINT`])
+      .where('service', '=', `${ctx.cfg.subscription.mode}:${ctx.cfg[ctx.cfg.subscription.mode.toLowerCase()].endpoint}`)
       .doUpdateSet({
         cursor: (eb) => eb.ref('excluded.cursor')
       })

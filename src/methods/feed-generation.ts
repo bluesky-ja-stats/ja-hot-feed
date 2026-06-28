@@ -2,7 +2,7 @@ import algos from '../algos'
 import { validateAuth } from '../auth'
 import { Server } from '../lexicon'
 import { ids } from '../lexicon/lexicons'
-import { type AppContext, env } from '../util/config'
+import type { AppContext } from '../util/config'
 import { AtUri } from '@atproto/syntax'
 import { InvalidRequestError } from '@atproto/xrpc-server'
 
@@ -11,7 +11,7 @@ export default function (server: Server, ctx: AppContext) {
     const feedUri = new AtUri(params.feed)
     const algo = algos[feedUri.rkey]
     if (
-      feedUri.hostname !== env.FEEDGEN_PUBLISHER_DID ||
+      feedUri.hostname !== ctx.cfg.publisher.did ||
       feedUri.collection !== ids.AppBskyFeedGenerator ||
       !algo
     ) {
@@ -25,7 +25,7 @@ export default function (server: Server, ctx: AppContext) {
      *
      * const requesterDid = await validateAuth(
      *   req,
-     *   ctx.cfg.serviceDid,
+     *   ctx.cfg.service.did,
      *   ctx.didResolver,
      * )
      */
