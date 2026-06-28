@@ -67,7 +67,7 @@ export class FeedGenerator {
       unauthenticatedCommits: false,
       unauthenticatedHandles: false,
       compress: true,
-      filterCollections: [ids.AppBskyFeedPost],
+      filterCollections: [ids.AppBskyFeedPost, ids.AppBskyFeedRepost, ids.AppBskyFeedLike],
       excludeIdentity: true,
       excludeAccount: true,
       excludeCommit: false,

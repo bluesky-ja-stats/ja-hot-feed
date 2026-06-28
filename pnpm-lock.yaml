@@ -20,6 +20,9 @@ importers:
       '@atproto/syntax':
         specifier: ^0.6.2
         version: 0.6.3
+      '@atproto/xrpc':
+        specifier: ^0.8.2
+        version: 0.8.2
       '@atproto/xrpc-server':
         specifier: ^0.11.3
         version: 0.11.3
@@ -210,9 +213,6 @@ packages:
   '@atproto/xrpc-server@0.9.6':
     resolution: {integrity: sha512-N/wPK0VEk8lZLkVsfG1wlkINQnBLO2fzWT+xclOjYl5lJwDi5xgiiyEQJAyZN49d6cmbsONu0SuOVw9pa5xLCw==}
     engines: {node: '>=18.7.0'}
-
-  '@atproto/xrpc@0.7.5':
-    resolution: {integrity: sha512-MUYNn5d2hv8yVegRL0ccHvTHAVj5JSnW07bkbiaz96UH45lvYNRVwt44z+yYVnb0/mvBzyD3/ZQ55TRGt7fHkA==}
 
   '@atproto/xrpc@0.7.7':
     resolution: {integrity: sha512-K1ZyO/BU8JNtXX5dmPp7b5UrkLMMqpsIa/Lrj5D3Su+j1Xwq1m6QJ2XJ1AgjEjkI1v4Muzm7klianLE6XGxtmA==}
@@ -1903,7 +1903,7 @@ snapshots:
       '@atproto/crypto': 0.4.4
       '@atproto/lexicon': 0.5.1
       '@atproto/ws-client': 0.0.2
-      '@atproto/xrpc': 0.7.5
+      '@atproto/xrpc': 0.7.7
       cbor-x: 1.6.0
       express: 4.21.2
       http-errors: 2.0.0
@@ -1916,11 +1916,6 @@ snapshots:
       - bufferutil
       - supports-color
       - utf-8-validate
-
-  '@atproto/xrpc@0.7.5':
-    dependencies:
-      '@atproto/lexicon': 0.5.1
-      zod: 3.25.76
 
   '@atproto/xrpc@0.7.7':
     dependencies:

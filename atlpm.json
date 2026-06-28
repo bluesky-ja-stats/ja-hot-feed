@@ -9,7 +9,6 @@
     "app.bsky.feed.getFeedSkeleton": "github",
     "app.bsky.feed.like": "github",
     "app.bsky.feed.post": "github",
-    "app.bsky.feed.repost": "github",
-    "app.bsky.graph.follow": "github"
+    "app.bsky.feed.repost": "github"
   }
 }

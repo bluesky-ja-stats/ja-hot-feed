@@ -13,14 +13,25 @@ migrations['001'] = {
   async up(db: Kysely<unknown>) {
     await db.schema
       .createTable('post')
+      .addColumn('score', 'integer', (col) => col.notNull())
       .addColumn('uri', 'varchar', (col) => col.primaryKey())
-      .addColumn('cid', 'varchar', (col) => col.notNull())
+      .execute()
+    await db.schema
+      .createTable('reaction')
+      .addColumn('uri', 'varchar', (col) => col.primaryKey())
+      .addColumn('type', 'varchar', (col) => col.notNull())
+      .addColumn('subject', 'varchar', (col) => col.notNull())
       .addColumn('indexedAt', 'varchar', (col) => col.notNull())
       .execute()
     await db.schema
       .createTable('sub_state')
       .addColumn('service', 'varchar', (col) => col.primaryKey())
       .addColumn('cursor', 'integer', (col) => col.notNull())
+      .execute()
+    await db.schema
+      .createIndex('idx_post_score')
+      .on('post')
+      .column('score')
       .execute()
   },
   async down(db: Kysely<unknown>) {
