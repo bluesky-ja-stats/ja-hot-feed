@@ -58,11 +58,11 @@ export class FeedGenerator {
         const res = await db
           .selectFrom('sub_state')
           .selectAll()
-          .where('service', '=', `${cfg.subscription.mode}:${cfg[cfg.subscription.mode.toLowerCase()].endpoint}`)
+          .where('service', '=', `${cfg.subscription.mode}:${cfg[cfg.subscription.mode.toLowerCase()].service}`)
           .executeTakeFirst()
         return res?.cursor
       },
-      service: cfg[cfg.subscription.mode.toLowerCase()].endpoint,
+      service: cfg[cfg.subscription.mode.toLowerCase()].service,
       subscriptionReconnectDelay: cfg.subscription.reconnectDelay,
       unauthenticatedCommits: false,
       unauthenticatedHandles: false,
