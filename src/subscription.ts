@@ -199,12 +199,12 @@ const updateCursor = async (cursor: number, ctx: AppContext) => {
   await ctx.db
     .insertInto('sub_state')
     .values({
-      service: `${ctx.cfg.subscription.mode}:${ctx.cfg[ctx.cfg.subscription.mode.toLowerCase()].service}`,
+      service: `${ctx.cfg.subscription.mode}:${ctx.cfg.subscription[ctx.cfg.subscription.mode.toLowerCase()]service}`,
       cursor,
     })
     .onConflict((oc) => oc
       .column('service')
-      .where('service', '=', `${ctx.cfg.subscription.mode}:${ctx.cfg[ctx.cfg.subscription.mode.toLowerCase()].service}`)
+      .where('service', '=', `${ctx.cfg.subscription.mode}:${ctx.cfg.subscription[ctx.cfg.subscription.mode.toLowerCase()]service}`)
       .doUpdateSet({
         cursor: (eb) => eb.ref('excluded.cursor')
       })
