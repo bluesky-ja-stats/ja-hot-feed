@@ -1,5 +1,6 @@
 export type DatabaseSchema = {
   post: Post
+  other_post: OtherPost
   reaction: Reaction
   sub_state: SubState
 }
@@ -7,6 +8,12 @@ export type DatabaseSchema = {
 export type Post = {
   score: number
   uri: string
+  indexedAt: string
+}
+
+export type OtherPost = {
+  uri: string
+  indexedAt: string
 }
 
 export type Reaction = {

@@ -15,6 +15,12 @@ migrations['001'] = {
       .createTable('post')
       .addColumn('score', 'integer', (col) => col.notNull())
       .addColumn('uri', 'varchar', (col) => col.primaryKey())
+      .addColumn('indexedAt', 'varchar', (col) => col.notNull())
+      .execute()
+    await db.schema
+      .createTable('other_post')
+      .addColumn('uri', 'varchar', (col) => col.primaryKey())
+      .addColumn('indexedAt', 'varchar', (col) => col.notNull())
       .execute()
     await db.schema
       .createTable('reaction')
@@ -36,6 +42,8 @@ migrations['001'] = {
   },
   async down(db: Kysely<unknown>) {
     await db.schema.dropTable('post').execute()
+    await db.schema.dropTable('other_post').execute()
+    await db.schema.dropTable('reaction').execute()
     await db.schema.dropTable('sub_state').execute()
   },
 }

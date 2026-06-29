@@ -20,16 +20,41 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
   } else if ('seq' in evt && evt.seq % 20 === 0) {
     await updateCursor(evt.seq, ctx)
   }
-  if ('time_us' in evt && i % 100 === 0) {
-    await updateScore(ctx)
-  } else if ('seq' in evt && evt.seq % 100 === 0) {
-    await updateScore(ctx)
-  }
 
   if (evt.event === 'create') {
-    if (evt.collection === ids.AppBskyFeedRepost && isRepost(evt.record)) {
-      const [subjectPost] = await getAllPosts(agent, ctx.logger, [evt.record.subject.uri])
-      if (isJa(subjectPost.record)) {
+    if (evt.collection === ids.AppBskyFeedPost && isPost(evt.record)) {
+      if (isJa(evt.record)) {
+        await ctx.db
+          .insertInto('post')
+          .values({
+            score: 0,
+            uri: evt.uri.toString(),
+            indexedAt: new Date().toISOString(),
+          })
+          .onConflict((oc) => oc.doNothing())
+          .execute()
+      } else {
+        await ctx.db
+          .insertInto('other_post')
+          .values({
+            uri: evt.uri.toString(),
+            indexedAt: new Date().toISOString(),
+          })
+          .onConflict((oc) => oc.doNothing())
+          .execute()
+      }
+    } else if (evt.collection === ids.AppBskyFeedRepost && isRepost(evt.record)) {
+      const jaPost = await ctx.db
+        .selectFrom('post')
+        .selectAll()
+        .where('uri', '=', evt.record.subject.uri)
+        .executeTakeFirst()
+      const otherPost = await ctx.db
+        .selectFrom('other_post')
+        .selectAll()
+        .where('uri', '=', evt.record.subject.uri)
+        .executeTakeFirst()
+      if (jaPost) {
         await ctx.db
           .insertInto('reaction')
           .values({
@@ -44,7 +69,8 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
           .insertInto('post')
           .values({
             score: 4,
-            uri: subjectPost.uri,
+            uri: jaPost.uri,
+            indexedAt: jaPost.indexedAt,
           })
           .onConflict((oc) => oc
             .column('uri')
@@ -53,10 +79,47 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
             })
           )
           .execute()
+      } else if (!otherPost) {
+        const [subjectPost] = await getAllPosts(agent, ctx.logger, [evt.record.subject.uri])
+        if (isJa(subjectPost.record)) {
+          await ctx.db
+            .insertInto('reaction')
+            .values({
+              uri: evt.uri.toString(),
+              type: 'repost',
+              subject: evt.record.subject.uri,
+              indexedAt: new Date().toISOString(),
+            })
+            .onConflict((oc) => oc.doNothing())
+            .execute()
+          await ctx.db
+            .insertInto('post')
+            .values({
+              score: 4,
+              uri: subjectPost.uri,
+              indexedAt: subjectPost.indexedAt,
+            })
+            .onConflict((oc) => oc
+              .column('uri')
+              .doUpdateSet({
+                score: (eb) => eb('score', '+', 4)
+              })
+            )
+            .execute()
+        }
       }
     } else if (evt.collection === ids.AppBskyFeedLike && isLike(evt.record)) {
-      const [subjectPost] = await getAllPosts(agent, ctx.logger, [evt.record.subject.uri])
-      if (isJa(subjectPost.record)) {
+      const jaPost = await ctx.db
+        .selectFrom('post')
+        .selectAll()
+        .where('uri', '=', evt.record.subject.uri)
+        .executeTakeFirst()
+      const otherPost = await ctx.db
+        .selectFrom('other_post')
+        .selectAll()
+        .where('uri', '=', evt.record.subject.uri)
+        .executeTakeFirst()
+      if (jaPost) {
         await ctx.db
           .insertInto('reaction')
           .values({
@@ -71,7 +134,8 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
           .insertInto('post')
           .values({
             score: 1,
-            uri: subjectPost.uri,
+            uri: jaPost.uri,
+            indexedAt: jaPost.indexedAt,
           })
           .onConflict((oc) => oc
             .column('uri')
@@ -80,6 +144,34 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
             })
           )
           .execute()
+      } else if (!otherPost) {
+        const [subjectPost] = await getAllPosts(agent, ctx.logger, [evt.record.subject.uri])
+        if (isJa(subjectPost.record)) {
+          await ctx.db
+            .insertInto('reaction')
+            .values({
+              uri: evt.uri.toString(),
+              type: 'like',
+              subject: evt.record.subject.uri,
+              indexedAt: new Date().toISOString(),
+            })
+            .onConflict((oc) => oc.doNothing())
+            .execute()
+          await ctx.db
+            .insertInto('post')
+            .values({
+              score: 1,
+              uri: subjectPost.uri,
+              indexedAt: subjectPost.indexedAt,
+            })
+            .onConflict((oc) => oc
+              .column('uri')
+              .doUpdateSet({
+                score: (eb) => eb('score', '+', 1)
+              })
+            )
+            .execute()
+        }
       }
     }
   }
@@ -90,6 +182,10 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
     if (evt.collection === ids.AppBskyFeedPost) {
       await ctx.db
         .deleteFrom('post')
+        .where('uri', '=', evt.uri.toString())
+        .execute()
+      await ctx.db
+        .deleteFrom('other_post')
         .where('uri', '=', evt.uri.toString())
         .execute()
       await ctx.db
@@ -112,6 +208,7 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
         .values({
           score: 0,
           uri: reaction.subject,
+          indexedAt: new Date().toISOString(),
         })
         .onConflict((oc) => oc
           .column('uri')
@@ -136,6 +233,7 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
         .values({
           score: 0,
           uri: reaction.subject,
+          indexedAt: new Date().toISOString(),
         })
         .onConflict((oc) => oc
           .column('uri')
@@ -146,53 +244,6 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
         .execute()
     }
   }
-}
-
-const updateScore = async (ctx: AppContext) => {
-  const expiraedReactions = await ctx.db
-    .selectFrom('reaction')
-    .selectAll()
-    .where('indexedAt', '<=', new Date(new Date().getTime() - ctx.cfg.subscription.reactionExpirationDelay).toISOString())
-    .execute()
-  for (const expiraedReaction of expiraedReactions) {
-    await ctx.db
-      .deleteFrom('reaction')
-      .where('uri', '=', expiraedReaction.uri)
-      .execute()
-    if (expiraedReaction.type === 'repost') {
-      await ctx.db
-        .insertInto('post')
-        .values({
-          score: 0,
-          uri: expiraedReaction.subject,
-        })
-        .onConflict((oc) => oc
-          .column('uri')
-          .doUpdateSet({
-            score: (eb) => eb('score', '-', 4)
-          })
-        )
-        .execute()
-    } else if (expiraedReaction.type === 'like') {
-      await ctx.db
-        .insertInto('post')
-        .values({
-          score: 0,
-          uri: expiraedReaction.subject,
-        })
-        .onConflict((oc) => oc
-          .column('uri')
-          .doUpdateSet({
-            score: (eb) => eb('score', '-', 1)
-          })
-        )
-        .execute()
-    }
-  }
-  await ctx.db
-    .deleteFrom('post')
-    .where('score', '<=', 0)
-    .execute()
 }
 
 const updateCursor = async (cursor: number, ctx: AppContext) => {

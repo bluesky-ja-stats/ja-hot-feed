@@ -1,9 +1,11 @@
 import { Ingester } from 'atingester'
+import { CronJob } from 'cron'
 import events from 'events'
 import express from 'express'
 import http from 'http'
 import { IdResolver } from '@atproto/identity'
 import { createDb, migrateToLatest } from './db'
+import { updateScore } from './job'
 import { createServer } from './lexicon'
 import { ids } from './lexicon/lexicons'
 import describeGenerator from './methods/describe-generator'
@@ -18,15 +20,22 @@ export class FeedGenerator {
   public server?: http.Server
   public ctx: AppContext
   public ingester: Ingester
+  public job: {
+    updateScore: CronJob
+  }
 
   constructor(
     app: express.Application,
     ctx: AppContext,
-    ingester: Ingester
+    ingester: Ingester,
+    job: {
+      updateScore: CronJob
+    }
   ) {
     this.app = app
     this.ctx = ctx
     this.ingester = ingester
+    this.job = job
   }
 
   static async create(
@@ -86,16 +95,21 @@ export class FeedGenerator {
     describeGenerator(server, ctx)
     app.use(server.xrpc.router)
     app.use(wellKnown(ctx))
+
+    const job = {
+      updateScore: new CronJob('*/10 * * * * *', async () => await updateScore({...ctx, logger: createLogger(['Runner', 'Bot', 'Job', 'UpdateScore'])})),
+    }
     
     logger.info('Server has been created!')
 
-    return new FeedGenerator(app, ctx, ingester)
+    return new FeedGenerator(app, ctx, ingester, job)
   }
 
   async start() {
     this.ctx.logger.info('Starting server...')
     await migrateToLatest(this.ctx.db)
     this.ingester.start()
+    this.job.updateScore.start()
     this.server = this.app.listen(this.ctx.cfg.service.port)
     await events.once(this.server, 'listening')
     this.ctx.logger.info('Server started')
@@ -103,6 +117,7 @@ export class FeedGenerator {
 
   async stop() {
     this.ctx.logger.info('Stopping server...')
+    await this.job.updateScore.stop()
     await this.ingester.destroy()
     return new Promise<void>((resolve) => {
       this.server?.close(() => {
