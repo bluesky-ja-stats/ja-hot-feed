@@ -40,7 +40,9 @@ const run = async () => {
       firehose: { service: env.FEEDGEN_SUBSCRIPTION_FIREHOSE_ENDPOINT },
       jetstream: { service: env.FEEDGEN_SUBSCRIPTION_JETSTREAM_ENDPOINT },
       turbostream: { service: env.FEEDGEN_SUBSCRIPTION_TURBOSTREAM_ENDPOINT },
+      cronInterval: env.FEEDGEN_CRON_INTERVAL,
       reactionExpirationDelay: env.FEEDGEN_REACTION_EXPIRATION_DELAY,
+      postCacheExpirationDelay: env.FEEDGEN_POSTCACHE_EXPIRATION_DELAY,
       reconnectDelay: env.FEEDGEN_SUBSCRIPTION_RECONNECT_DELAY,
     },
     publisher: {

@@ -2,6 +2,7 @@ export type DatabaseSchema = {
   post: Post
   other_post: OtherPost
   reaction: Reaction
+  reaction_queue: Reaction
   sub_state: SubState
 }
 
@@ -18,7 +19,7 @@ export type OtherPost = {
 
 export type Reaction = {
   uri: string
-  type: 'like' | 'repost'
+  type: 'like' | 'repost' | 'quote'
   subject: string
   indexedAt: string
 }

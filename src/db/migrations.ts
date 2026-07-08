@@ -30,6 +30,13 @@ migrations['001'] = {
       .addColumn('indexedAt', 'varchar', (col) => col.notNull())
       .execute()
     await db.schema
+        .createTable('reaction_queue')
+        .addColumn('uri', 'varchar', (col) => col.primaryKey())
+        .addColumn('type', 'varchar', (col) => col.notNull())
+        .addColumn('subject', 'varchar', (col) => col.notNull())
+        .addColumn('indexedAt', 'varchar', (col) => col.notNull())
+        .execute()
+    await db.schema
       .createTable('sub_state')
       .addColumn('service', 'varchar', (col) => col.primaryKey())
       .addColumn('cursor', 'integer', (col) => col.notNull())
@@ -44,6 +51,8 @@ migrations['001'] = {
     await db.schema.dropTable('post').execute()
     await db.schema.dropTable('other_post').execute()
     await db.schema.dropTable('reaction').execute()
+    await db.schema.dropTable('reaction_queue').execute()
     await db.schema.dropTable('sub_state').execute()
+    await db.schema.dropIndex('idx_post_score').execute()
   },
 }

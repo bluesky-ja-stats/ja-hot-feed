@@ -34,7 +34,9 @@ export interface SubscriptionConfig {
   firehose: { service: string }
   jetstream: { service: string }
   turbostream: { service: string }
+  cronInterval: number
   reactionExpirationDelay: number
+  postCacheExpirationDelay: number
   reconnectDelay: number
 }
 
@@ -77,8 +79,14 @@ export const env = cleanEnv(process.env, {
   FEEDGEN_SERVICE_DID: str({
     default: `did:web:${process.env.FEEDGEN_HOSTNAME ? process.env.FEEDGEN_HOSTNAME : 'example.com'}`,
   }),
+  FEEDGEN_CRON_INTERVAL: num({
+    default: 5
+  }),
   FEEDGEN_REACTION_EXPIRATION_DELAY: num({
-    default: 60000
+    default: 1800000
+  }),
+  FEEDGEN_POSTCACHE_EXPIRATION_DELAY: num({
+    default: 2592000000
   }),
   FEEDGEN_SUBSCRIPTION_RECONNECT_DELAY: num({
     default: 3000

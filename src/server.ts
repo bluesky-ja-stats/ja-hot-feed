@@ -57,7 +57,7 @@ export class FeedGenerator {
       logger,
     }
 
-    const ingesterLogger = createLogger(['Runner', 'Server', 'Ingester'])
+    const ingesterLogger = createLogger(['Runner', 'Server', '          Ingester'])
     const ingester = new Ingester(cfg.subscription.mode, {
       idResolver,
       handleEvent: async (evt) => await handleEvent(evt, {...ctx, logger: ingesterLogger}),
@@ -97,7 +97,7 @@ export class FeedGenerator {
     app.use(wellKnown(ctx))
 
     const job = {
-      updateScore: new CronJob('*/10 * * * * *', async () => await updateScore({...ctx, logger: createLogger(['Runner', 'Bot', 'Job', 'UpdateScore'])})),
+      updateScore: new CronJob(`*/${ctx.cfg.subscription.cronInterval} * * * * *`, async () => await updateScore({...ctx, logger: createLogger(['Runner', 'Server', 'Job', 'UpdateScore'])})),
     }
     
     logger.info('Server has been created!')
