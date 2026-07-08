@@ -80,7 +80,10 @@ export const updateScore = async (ctx: AppContext) => {
         }
       }
     }
+  } else {
+    ctx.logger.debug(`${newCount}: reaction is abandoned`)
   }
+  ctx.logger.debug(`${newCount}: Updating score...`)
   const expiraedReactions = await ctx.db
     .selectFrom('reaction')
     .selectAll()
