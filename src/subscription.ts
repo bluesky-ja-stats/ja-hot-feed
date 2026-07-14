@@ -38,12 +38,7 @@ export const handleEvent = async (evt: IngesterEvent, ctx: AppContext): Promise<
             uri: evt.uri.toString(),
             indexedAt: new Date().toISOString(),
           })
-          .onConflict((oc) => oc
-            .column('uri')
-            .doUpdateSet({
-              indexedAt: (eb) => eb.ref('excluded.indexedAt')
-            })
-          )
+          .onConflict((oc) => oc.doNothing())
           .execute()
       }
       if (evt.record.embed && 'record' in evt.record.embed && evt.record.embed.record) {
@@ -124,19 +119,6 @@ const createReaction = async (ctx: AppContext, evt: IngesterEvent, subjectUri: s
       .execute()
   } else if (otherPost) {
     ctx.logger.debug(`  cache-> other ${type.padEnd(6)}: ${evt.time}`)
-    await ctx.db
-      .insertInto('other_post')
-      .values({
-        uri: otherPost.uri,
-        indexedAt: new Date().toISOString(),
-      })
-      .onConflict((oc) => oc
-        .column('uri')
-        .doUpdateSet({
-          indexedAt: (eb) => eb.ref('excluded.indexedAt')
-        })
-      )
-      .execute()
   } else {
     ctx.logger.debug(`->queue         ${type.padEnd(6)}: ${evt.time}`)
     await ctx.db

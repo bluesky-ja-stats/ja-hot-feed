@@ -1,5 +1,6 @@
 import { Agent, type AppBskyFeedGetPosts, CredentialSession } from '@atproto/api'
 import { XRPCError } from '@atproto/xrpc'
+import type { OtherPost, Post, Reaction } from './db/schema'
 import { isJa } from './subscription'
 import type { AppContext } from './util/config'
 import { type Logger } from './util/logger'
@@ -15,8 +16,8 @@ export const updateScore = async (ctx: AppContext) => {
     .selectFrom('reaction_queue')
     .selectAll()
     .execute()
-  const maxDeleteSize = 32766
-  for (const sepDeletes of queuedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxDeleteSize ? [] : [a.slice(i, i + maxDeleteSize)])) {
+  const maxTransactionSize = 32766
+  for (const sepDeletes of queuedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
     await ctx.db
       .deleteFrom('reaction_queue')
       .where('uri', 'in', sepDeletes)
@@ -29,6 +30,15 @@ export const updateScore = async (ctx: AppContext) => {
   const r = unknownSubjectUris.flatMap((_, i, a) => i % maxUriSize ? [] : [a.slice(i, i + maxUriSize)])
   if (r.length <= ctx.cfg.subscription.cronInterval*2) {
     let n = 0
+    const updates: {
+      reactions: Reaction[]
+      posts: Post[]
+      otherPosts: OtherPost[]
+    } = {
+      reactions: [],
+      posts: [],
+      otherPosts: [],
+    }
     for (const sepUris of r) {
       n++
       const progress = `${n}/${r.length}`
@@ -39,46 +49,50 @@ export const updateScore = async (ctx: AppContext) => {
           for (const reaction of reactions) {
             ctx.logger.debug(`->cache   ja    ${reaction.type.padEnd(6)}: ${reaction.indexedAt} -> ${subjectPost.indexedAt}${subjectPost.indexedAt <= new Date(new Date().getTime() - ctx.cfg.subscription.postCacheExpirationDelay).toISOString() ? '' : '(tmp)'}`)
             const score = reaction.type === 'like' ? 1 : 4
-            await ctx.db
-              .insertInto('reaction')
-              .values(reaction)
-              .onConflict((oc) => oc.doNothing())
-              .execute()
-            await ctx.db
-              .insertInto('post')
-              .values({
-                score,
-                uri: subjectPost.uri,
-                indexedAt: subjectPost.indexedAt,
-              })
-              .onConflict((oc) => oc
-                .column('uri')
-                .doUpdateSet({
-                  score: (eb) => eb('score', '+', score)
-                })
-              )
-              .execute()
+            updates.reactions.push(reaction)
+            updates.posts.push({
+              score,
+              uri: subjectPost.uri,
+              indexedAt: subjectPost.indexedAt,
+            })
           }
         } else {
-          await ctx.db
-            .insertInto('other_post')
-            .values({
-              uri: subjectPost.uri,
-              indexedAt: new Date().toISOString(),
-            })
-            .onConflict((oc) => oc
-              .column('uri')
-              .doUpdateSet({
-                indexedAt: (eb) => eb.ref('excluded.indexedAt')
-              })
-            )
-            .execute()
+          updates.otherPosts.push({
+            uri: subjectPost.uri,
+            indexedAt: new Date().toISOString(),
+          })
           const reactions = queuedReactions.filter(x => x.subject === subjectPost.uri)
           for (const reaction of reactions) {
             ctx.logger.debug(`->cache   other ${reaction.type.padEnd(6)}: ${reaction.indexedAt} -> ${subjectPost.indexedAt}${subjectPost.indexedAt <= new Date(new Date().getTime() - ctx.cfg.subscription.postCacheExpirationDelay).toISOString() ? '' : '(tmp)'}`)
           }
         }
       }
+    }
+    for (const sepValues of updates.reactions.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+      await ctx.db
+        .insertInto('reaction')
+        .values(sepValues)
+        .onConflict((oc) => oc.doNothing())
+        .execute()
+    }
+    for (const sepValues of updates.posts.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+      await ctx.db
+        .insertInto('post')
+        .values(sepValues)
+        .onConflict((oc) => oc
+          .column('uri')
+          .doUpdateSet({
+            score: (eb) => eb('score', '+', eb.ref('excluded.score'))
+          })
+        )
+        .execute()
+    }
+    for (const sepValues of updates.otherPosts.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+      await ctx.db
+        .insertInto('other_post')
+        .values(sepValues)
+        .onConflict((oc) => oc.doNothing())
+        .execute()
     }
   } else {
     ctx.logger.debug(`${newCount}: reaction is abandoned`)
@@ -89,23 +103,33 @@ export const updateScore = async (ctx: AppContext) => {
     .selectAll()
     .where('indexedAt', '<=', new Date(new Date().getTime() - ctx.cfg.subscription.reactionExpirationDelay).toISOString())
     .execute()
-  for (const expiraedReaction of expiraedReactions) {
+  for (const sepDeletes of expiraedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
     await ctx.db
       .deleteFrom('reaction')
-      .where('uri', '=', expiraedReaction.uri)
+      .where('uri', 'in', sepDeletes)
       .execute()
-    const score = expiraedReaction.type === 'like' ? 1 : 4
+  }
+  const updates: {
+    posts: Post[]
+  } = {
+    posts: [],
+  }
+  for (const expiraedReaction of expiraedReactions) {
+    const score = expiraedReaction.type === 'like' ? -1 : -4
+    updates.posts.push({
+      score,
+      uri: expiraedReaction.subject,
+      indexedAt: new Date().toISOString(),
+    })
+  }
+  for (const sepValues of updates.posts.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
     await ctx.db
       .insertInto('post')
-      .values({
-        score: 0,
-        uri: expiraedReaction.subject,
-        indexedAt: new Date().toISOString(),
-      })
+      .values(sepValues)
       .onConflict((oc) => oc
         .column('uri')
         .doUpdateSet({
-          score: (eb) => eb('score', '-', score)
+          score: (eb) => eb('score', '+', eb.ref('excluded.score'))
         })
       )
       .execute()

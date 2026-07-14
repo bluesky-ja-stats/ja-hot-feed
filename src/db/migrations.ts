@@ -46,6 +46,37 @@ migrations['001'] = {
       .on('post')
       .column('score')
       .execute()
+    await db.schema
+      .createIndex('idx_post_uri')
+      .on('post')
+      .column('uri')
+      .execute()
+    await db.schema
+      .createIndex('idx_post_indexedAt_score')
+      .on('post')
+      .column('indexedAt')
+      .column('score')
+      .execute()
+    await db.schema
+      .createIndex('idx_other_post_uri')
+      .on('other_post')
+      .column('uri')
+      .execute()
+    await db.schema
+      .createIndex('idx_other_post_indexedAt')
+      .on('other_post')
+      .column('indexedAt')
+      .execute()
+    await db.schema
+      .createIndex('idx_reaction_uri')
+      .on('reaction')
+      .column('uri')
+      .execute()
+    await db.schema
+      .createIndex('idx_reaction_indexedAt')
+      .on('reaction')
+      .column('indexedAt')
+      .execute()
   },
   async down(db: Kysely<unknown>) {
     await db.schema.dropTable('post').execute()
@@ -54,5 +85,11 @@ migrations['001'] = {
     await db.schema.dropTable('reaction_queue').execute()
     await db.schema.dropTable('sub_state').execute()
     await db.schema.dropIndex('idx_post_score').execute()
+    await db.schema.dropIndex('idx_post_uri').execute()
+    await db.schema.dropIndex('idx_post_indexedAt_score').execute()
+    await db.schema.dropIndex('idx_other_post_uri').execute()
+    await db.schema.dropIndex('idx_other_post_indexedAt').execute()
+    await db.schema.dropIndex('idx_reaction_uri').execute()
+    await db.schema.dropIndex('idx_reaction_indexedAt').execute()
   },
 }
