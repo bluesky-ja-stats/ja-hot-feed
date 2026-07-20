@@ -147,40 +147,6 @@ export const updateScore = async (ctx: AppContext) => {
   ctx.logger.debug(`${newCount}: Job has done!`)
 }
 
-export const cleanScore = async (ctx: AppContext) => {
-  ctx.logger.debug(`Starting job...`)
-  const posts = (await ctx.db
-    .selectFrom('post')
-    .selectAll()
-    .execute())
-    .map(x => ({...x, score: 0}))
-  const reactions = await ctx.db
-    .selectFrom('reaction')
-    .selectAll()
-    .execute()
-  for (const reaction of reactions) {
-    const score = reaction.type === 'like' ? 1 : 4
-    const post = posts.find(p => p.uri === reaction.subject)
-    if (post) {
-      post.score += score
-      posts[posts.findIndex(p => p.uri === reaction.subject)] = post
-    }
-  }
-  for (const sepValues of posts.flatMap((_, i, a) => i % maxInsertSize ? [] : [a.slice(i, i + maxInsertSize)])) {
-    await ctx.db
-      .insertInto('post')
-      .values(sepValues)
-      .onConflict((oc) => oc
-        .column('uri')
-        .doUpdateSet({
-          score: (eb) => eb.ref('excluded.score')
-        })
-      )
-      .execute()
-  }
-  ctx.logger.debug(`Job has done!`)
-}
-
 const getPosts = async (agent: Agent, logger: Logger, uris: string[], count: number, progress: string): Promise<AppBskyFeedGetPosts.OutputSchema['posts']> => {
   try {
     logger.debug(`${count}: get ${progress}`)
