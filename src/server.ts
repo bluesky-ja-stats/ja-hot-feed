@@ -5,7 +5,7 @@ import express from 'express'
 import http from 'http'
 import { IdResolver } from '@atproto/identity'
 import { createDb, migrateToLatest } from './db'
-import { updateScore } from './job'
+import { cleanScore, updateScore } from './job'
 import { createServer } from './lexicon'
 import { ids } from './lexicon/lexicons'
 import describeGenerator from './methods/describe-generator'
@@ -22,6 +22,7 @@ export class FeedGenerator {
   public ingester: Ingester
   public job: {
     updateScore: CronJob
+    cleanScore: CronJob
   }
 
   constructor(
@@ -30,6 +31,7 @@ export class FeedGenerator {
     ingester: Ingester,
     job: {
       updateScore: CronJob
+      cleanScore: CronJob
     }
   ) {
     this.app = app
@@ -98,6 +100,7 @@ export class FeedGenerator {
 
     const job = {
       updateScore: new CronJob(`*/${ctx.cfg.subscription.cronInterval} * * * * *`, async () => await updateScore({...ctx, logger: createLogger(['Runner', 'Server', 'Job', 'UpdateScore'])})),
+      cleanScore: new CronJob(`0 */${ctx.cfg.subscription.reactionExpirationDelay / 60000} * * * *`, async () => await cleanScore({...ctx, logger: createLogger(['Runner', 'Server', 'Job', 'CleanScore'])})),
     }
     
     logger.info('Server has been created!')
@@ -110,6 +113,7 @@ export class FeedGenerator {
     await migrateToLatest(this.ctx.db)
     this.ingester.start()
     this.job.updateScore.start()
+    this.job.cleanScore.start()
     this.server = this.app.listen(this.ctx.cfg.service.port)
     await events.once(this.server, 'listening')
     this.ctx.logger.info('Server started')
@@ -118,6 +122,7 @@ export class FeedGenerator {
   async stop() {
     this.ctx.logger.info('Stopping server...')
     await this.job.updateScore.stop()
+    await this.job.cleanScore.stop()
     await this.ingester.destroy()
     return new Promise<void>((resolve) => {
       this.server?.close(() => {

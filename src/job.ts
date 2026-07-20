@@ -6,6 +6,8 @@ import type { AppContext } from './util/config'
 import { type Logger } from './util/logger'
 
 const agent = new Agent(new CredentialSession(new URL('https://api.bsky.app')))
+const maxDeleteSize = 32766
+const maxInsertSize = 4096
 
 let count = 0
 export const updateScore = async (ctx: AppContext) => {
@@ -16,8 +18,7 @@ export const updateScore = async (ctx: AppContext) => {
     .selectFrom('reaction_queue')
     .selectAll()
     .execute()
-  const maxTransactionSize = 32766
-  for (const sepDeletes of queuedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+  for (const sepDeletes of queuedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxDeleteSize ? [] : [a.slice(i, i + maxDeleteSize)])) {
     await ctx.db
       .deleteFrom('reaction_queue')
       .where('uri', 'in', sepDeletes)
@@ -68,14 +69,14 @@ export const updateScore = async (ctx: AppContext) => {
         }
       }
     }
-    for (const sepValues of updates.reactions.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+    for (const sepValues of updates.reactions.flatMap((_, i, a) => i % maxInsertSize ? [] : [a.slice(i, i + maxInsertSize)])) {
       await ctx.db
         .insertInto('reaction')
         .values(sepValues)
         .onConflict((oc) => oc.doNothing())
         .execute()
     }
-    for (const sepValues of updates.posts.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+    for (const sepValues of updates.posts.flatMap((_, i, a) => i % maxInsertSize ? [] : [a.slice(i, i + maxInsertSize)])) {
       await ctx.db
         .insertInto('post')
         .values(sepValues)
@@ -87,7 +88,7 @@ export const updateScore = async (ctx: AppContext) => {
         )
         .execute()
     }
-    for (const sepValues of updates.otherPosts.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+    for (const sepValues of updates.otherPosts.flatMap((_, i, a) => i % maxInsertSize ? [] : [a.slice(i, i + maxInsertSize)])) {
       await ctx.db
         .insertInto('other_post')
         .values(sepValues)
@@ -103,7 +104,7 @@ export const updateScore = async (ctx: AppContext) => {
     .selectAll()
     .where('indexedAt', '<=', new Date(new Date().getTime() - ctx.cfg.subscription.reactionExpirationDelay).toISOString())
     .execute()
-  for (const sepDeletes of expiraedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+  for (const sepDeletes of expiraedReactions.map(x => x.uri).flatMap((_, i, a) => i % maxDeleteSize ? [] : [a.slice(i, i + maxDeleteSize)])) {
     await ctx.db
       .deleteFrom('reaction')
       .where('uri', 'in', sepDeletes)
@@ -122,7 +123,7 @@ export const updateScore = async (ctx: AppContext) => {
       indexedAt: new Date().toISOString(),
     })
   }
-  for (const sepValues of updates.posts.flatMap((_, i, a) => i % maxTransactionSize ? [] : [a.slice(i, i + maxTransactionSize)])) {
+  for (const sepValues of updates.posts.flatMap((_, i, a) => i % maxInsertSize ? [] : [a.slice(i, i + maxInsertSize)])) {
     await ctx.db
       .insertInto('post')
       .values(sepValues)
@@ -144,6 +145,40 @@ export const updateScore = async (ctx: AppContext) => {
     .where('indexedAt', '<=', new Date(new Date().getTime() - ctx.cfg.subscription.postCacheExpirationDelay).toISOString())
     .execute()
   ctx.logger.debug(`${newCount}: Job has done!`)
+}
+
+export const cleanScore = async (ctx: AppContext) => {
+  ctx.logger.debug(`Starting job...`)
+  const posts = (await ctx.db
+    .selectFrom('post')
+    .selectAll()
+    .execute())
+    .map(x => ({...x, score: 0}))
+  const reactions = await ctx.db
+    .selectFrom('reaction')
+    .selectAll()
+    .execute()
+  for (const reaction of reactions) {
+    const score = reaction.type === 'like' ? 1 : 4
+    const post = posts.find(p => p.uri === reaction.subject)
+    if (post) {
+      post.score += score
+      posts[posts.findIndex(p => p.uri === reaction.subject)] = post
+    }
+  }
+  for (const sepValues of posts.flatMap((_, i, a) => i % maxInsertSize ? [] : [a.slice(i, i + maxInsertSize)])) {
+    await ctx.db
+      .insertInto('post')
+      .values(sepValues)
+      .onConflict((oc) => oc
+        .column('uri')
+        .doUpdateSet({
+          score: (eb) => eb.ref('excluded.score')
+        })
+      )
+      .execute()
+  }
+  ctx.logger.debug(`Job has done!`)
 }
 
 const getPosts = async (agent: Agent, logger: Logger, uris: string[], count: number, progress: string): Promise<AppBskyFeedGetPosts.OutputSchema['posts']> => {
